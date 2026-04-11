@@ -539,7 +539,11 @@ async function openFullControl(deviceId) {
     try {
         const rfb = new RFB(screen, wsUrl, opts);
         rfb.showDotCursor = true; // Enables remote/dot cursor
-        rfb.viewOnly = false; // Full control always enables input
+        rfb.viewOnly = true; // Default to view-only for Full Screen
+        
+        const toggleText = $('#fc-toggle-control-text');
+        if (toggleText) toggleText.textContent = 'Enable Control';
+
         rfb.scaleViewport = true;
         rfb.resizeSession = false;
         rfb.background = '#000';
@@ -1196,6 +1200,19 @@ function bindEvents() {
     });
 
     // Full Control toolbar
+    $('#fc-toggle-control').addEventListener('click', () => {
+        if (!state.fullControlRfb) return;
+        state.fullControlRfb.viewOnly = !state.fullControlRfb.viewOnly;
+        
+        const text = $('#fc-toggle-control-text');
+        if (state.fullControlRfb.viewOnly) {
+            text.textContent = 'Enable Control';
+            toast('View Only mode (Control Disabled)', 'info');
+        } else {
+            text.textContent = 'Disable Control';
+            toast('Full Control mode enabled', 'success');
+        }
+    });
     $('#fc-disconnect').addEventListener('click', closeFullControl);
     $('#fc-ctrl-alt-del').addEventListener('click', () => {
         state.fullControlRfb?.sendCtrlAltDel();
