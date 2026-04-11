@@ -576,6 +576,23 @@ async function openFullControl(deviceId) {
             state.remoteClipboard = e.detail.text;
         });
 
+        // FPS Tracking
+        let frames = 0;
+        let lastTime = performance.now();
+        const metricsEl = $('#fc-metrics');
+        if (metricsEl) metricsEl.textContent = '-- FPS';
+
+        rfb.addEventListener('FBUComplete', () => {
+            frames++;
+            const now = performance.now();
+            if (now - lastTime >= 1000) {
+                const fps = Math.round((frames * 1000) / (now - lastTime));
+                if (metricsEl) metricsEl.textContent = `${fps} FPS`;
+                frames = 0;
+                lastTime = now;
+            }
+        });
+
         state.fullControlRfb = rfb;
 
         // Focus the remote session
