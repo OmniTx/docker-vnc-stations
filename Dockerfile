@@ -11,10 +11,16 @@ RUN pip install --no-cache-dir \
 
 WORKDIR /app
 
-# Download noVNC using Python (handles GitHub redirects properly)
-RUN python3 -c "import urllib.request; urllib.request.urlretrieve('https://github.com/novnc/noVNC/archive/refs/tags/v1.5.0.tar.gz', '/tmp/novnc.tar.gz')" && \
+# Download noVNC v1.6.0 (latest stable)
+RUN python3 -c "\
+import urllib.request, ssl; \
+ctx = ssl.create_default_context(); \
+urllib.request.urlretrieve( \
+  'https://github.com/novnc/noVNC/archive/refs/tags/v1.6.0.tar.gz', \
+  '/tmp/novnc.tar.gz' \
+)" && \
     tar xzf /tmp/novnc.tar.gz -C /tmp && \
-    mv /tmp/noVNC-1.5.0 /app/static/novnc && \
+    mv /tmp/noVNC-1.6.0 /app/static/novnc && \
     rm /tmp/novnc.tar.gz
 
 COPY app/ /app/app/
