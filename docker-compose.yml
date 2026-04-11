@@ -8,8 +8,8 @@ services:
       - "8105:80"
       - "6100-6199:6100-6199"
     volumes:
-      - vnc_data:/app/data
-    environment:
+      - /DATA/AppData/vnc-monitor:/app/data
+    environment: 
       - VNC_ENCRYPTION_KEY=${VNC_ENCRYPTION_KEY:-vnc-monitor-default-key-change-me}
       - HEALTH_CHECK_INTERVAL=${HEALTH_CHECK_INTERVAL:-30}
     restart: unless-stopped
