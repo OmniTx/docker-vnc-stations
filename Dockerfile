@@ -1,9 +1,5 @@
 FROM python:3.11-slim
 
-RUN apt-get update && \
-    apt-get install -y --no-install-recommends git && \
-    rm -rf /var/lib/apt/lists/*
-
 RUN pip install --no-cache-dir \
     fastapi \
     "uvicorn[standard]" \
@@ -15,7 +11,11 @@ RUN pip install --no-cache-dir \
 
 WORKDIR /app
 
-RUN git clone --depth 1 https://github.com/novnc/noVNC.git /app/static/novnc
+# Download noVNC as tarball (much faster than git clone)
+ADD https://github.com/novnc/noVNC/archive/refs/tags/v1.5.0.tar.gz /tmp/novnc.tar.gz
+RUN tar xzf /tmp/novnc.tar.gz -C /tmp && \
+    mv /tmp/noVNC-1.5.0 /app/static/novnc && \
+    rm /tmp/novnc.tar.gz
 
 COPY app/ /app/app/
 COPY static/index.html static/app.js static/style.css /app/static/
