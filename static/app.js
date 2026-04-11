@@ -721,7 +721,11 @@ async function handleContextAction(action) {
             const rfb = state.rfbInstances[deviceId];
             if (rfb) {
                 rfb.viewOnly = !rfb.viewOnly;
-                toast(rfb.viewOnly ? 'Control disabled' : 'Control enabled', 'info');
+                const screenEl = document.getElementById(`tile-screen-${deviceId}`);
+                if (screenEl) {
+                    screenEl.style.pointerEvents = rfb.viewOnly ? 'none' : 'auto';
+                }
+                toast(rfb.viewOnly ? 'Tile Control Disabled' : 'Tile Control Enabled', 'info');
             }
             break;
         }
