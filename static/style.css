@@ -330,6 +330,24 @@ input[type="range"]::-webkit-slider-thumb {
     50% { opacity: .5; }
 }
 
+.tile-actions {
+    display: flex; align-items: center; gap: 4px; flex-shrink: 0;
+}
+
+.tile-control-btn {
+    display: flex; align-items: center; gap: 4px;
+    padding: 3px 8px; height: 24px;
+    background: transparent;
+    border: 1px solid var(--accent);
+    color: var(--accent);
+    font-family: var(--font-sans); font-size: 11px; font-weight: 500;
+    cursor: pointer; white-space: nowrap;
+    transition: background .15s, color .15s;
+}
+.tile-control-btn:hover {
+    background: var(--accent); color: var(--text-inverse);
+}
+
 .tile-menu-btn {
     display: flex; align-items: center; justify-content: center;
     width: 28px; height: 28px;

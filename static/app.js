@@ -178,7 +178,7 @@ function renderDashboard() {
         for (const device of devices) {
             const status = device.health_status || 'unknown';
             html += `<div class="device-tile" data-id="${device.id}" data-status="${status}" draggable="true">`;
-            html += `<div class="tile-screen" id="tile-screen-${device.id}">`;
+            html += `<div class="tile-screen" id="tile-screen-${device.id}" style="pointer-events:none">`;
             html += `<div class="tile-overlay" id="tile-overlay-${device.id}">`;
             html += `<div class="tile-spinner"></div>`;
             html += `<span id="tile-status-text-${device.id}">Connecting...</span>`;
@@ -189,7 +189,10 @@ function renderDashboard() {
             html += `<span class="tile-name" title="${esc(device.name)}">${esc(device.name)}</span>`;
             html += `<span class="tile-host">${esc(device.host)}</span>`;
             html += `</div>`;
+            html += `<div class="tile-actions">`;
+            html += `<button class="tile-control-btn" data-id="${device.id}" title="Open Full Control">▶ Control</button>`;
             html += `<button class="tile-menu-btn" data-id="${device.id}" title="Options">⋮</button>`;
+            html += `</div>`;
             html += `</div></div>`;
         }
 
@@ -251,12 +254,15 @@ function attachTileEvents() {
         });
     });
 
-    // Tile double-click → full control
-    $$('.device-tile').forEach(tile => {
-        tile.addEventListener('dblclick', () => {
-            const id = parseInt(tile.dataset.id);
-            openFullControl(id);
+    // Full Control button on each tile
+    $$('.tile-control-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            openFullControl(parseInt(btn.dataset.id));
         });
+    });
+
+    $$('.device-tile').forEach(tile => {
 
         // Context menu on three-dot button
         const menuBtn = tile.querySelector('.tile-menu-btn');
