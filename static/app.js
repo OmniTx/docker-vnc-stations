@@ -190,7 +190,7 @@ function renderDashboard() {
             html += `<span class="tile-host">${esc(device.host)}</span>`;
             html += `</div>`;
             html += `<div class="tile-actions">`;
-            html += `<button class="tile-control-btn" data-id="${device.id}" title="Open Full Control">▶ Control</button>`;
+            html += `<button class="tile-control-btn" data-id="${device.id}" title="Open Full Screen">▶ Open</button>`;
             html += `<button class="tile-menu-btn" data-id="${device.id}" title="Options">⋮</button>`;
             html += `</div>`;
             html += `</div></div>`;
@@ -277,6 +277,11 @@ function attachTileEvents() {
         tile.addEventListener('contextmenu', (e) => {
             e.preventDefault();
             showContextMenu(e, parseInt(tile.dataset.id));
+        });
+
+        // Double click to open
+        tile.addEventListener('dblclick', () => {
+            openFullControl(parseInt(tile.dataset.id));
         });
 
         // Drag & Drop
