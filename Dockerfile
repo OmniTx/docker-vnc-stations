@@ -14,9 +14,12 @@ RUN pip install --no-cache-dir \
     apscheduler
 
 WORKDIR /app
+RUN mkdir -p /app/static
 
-RUN curl -sL https://github.com/novnc/noVNC/archive/refs/tags/v1.6.0.tar.gz | tar xz -C /tmp && \
-    mv /tmp/noVNC-1.6.0 /app/static/novnc
+# Download noVNC v1.6.0 — step by step for reliability
+RUN curl -fSL -o /tmp/novnc.tar.gz https://github.com/novnc/noVNC/archive/refs/tags/v1.6.0.tar.gz
+RUN tar xzf /tmp/novnc.tar.gz -C /tmp
+RUN mv /tmp/noVNC-1.6.0 /app/static/novnc && rm -f /tmp/novnc.tar.gz
 
 COPY app/ /app/app/
 COPY static/index.html static/app.js static/style.css /app/static/
