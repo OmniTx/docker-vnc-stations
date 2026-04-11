@@ -2,9 +2,7 @@ version: "3.8"
 
 services:
   vnc-dashboard:
-    build:
-      context: .
-      dockerfile: Dockerfile
+    image: ghcr.io/omnitx/docker-vnc-stations:latest
     container_name: vnc-monitor-dashboard
     ports:
       - "8080:8080"
