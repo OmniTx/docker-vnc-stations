@@ -1200,7 +1200,13 @@ function bindEvents() {
 
     // Fullscreen mode
     $('#btn-fullscreen').addEventListener('click', () => {
-        document.body.classList.toggle('fullscreen-mode');
+        if (!document.fullscreenElement) {
+            document.documentElement.requestFullscreen?.().catch(() => {
+                toast('Fullscreen not supported', 'warning');
+            });
+        } else {
+            document.exitFullscreen?.();
+        }
     });
 
     // Full Control toolbar
