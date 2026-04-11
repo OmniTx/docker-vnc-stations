@@ -1,0 +1,17 @@
+version: "3.8"
+
+services:
+  vnc-dashboard:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: vnc-monitor-dashboard
+    ports:
+      - "8080:8080"
+      - "6100-6199:6100-6199"
+    volumes:
+      - ./data:/app/data
+    environment:
+      - VNC_ENCRYPTION_KEY=${VNC_ENCRYPTION_KEY:-vnc-monitor-default-key-change-me}
+      - HEALTH_CHECK_INTERVAL=${HEALTH_CHECK_INTERVAL:-30}
+    restart: unless-stopped
