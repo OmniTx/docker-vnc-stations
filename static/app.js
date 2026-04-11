@@ -538,6 +538,7 @@ async function openFullControl(deviceId) {
 
     try {
         const rfb = new RFB(screen, wsUrl, opts);
+        rfb.showDotCursor = true; // Enables remote/dot cursor
         rfb.viewOnly = false; // Full control always enables input
         rfb.scaleViewport = true;
         rfb.resizeSession = false;
