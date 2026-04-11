@@ -5,7 +5,7 @@ services:
     image: ghcr.io/omnitx/docker-vnc-stations:latest
     container_name: vnc-monitor-dashboard
     ports:
-      - "8080:8080"
+      - "8105:80"
       - "6100-6199:6100-6199"
     volumes:
       - ./data:/app/data
