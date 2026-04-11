@@ -1,5 +1,9 @@
 FROM python:3.11-slim
 
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends curl ca-certificates && \
+    rm -rf /var/lib/apt/lists/*
+
 RUN pip install --no-cache-dir \
     fastapi \
     "uvicorn[standard]" \
@@ -11,17 +15,8 @@ RUN pip install --no-cache-dir \
 
 WORKDIR /app
 
-# Download noVNC v1.6.0 (latest stable)
-RUN python3 -c "\
-import urllib.request, ssl; \
-ctx = ssl.create_default_context(); \
-urllib.request.urlretrieve( \
-  'https://github.com/novnc/noVNC/archive/refs/tags/v1.6.0.tar.gz', \
-  '/tmp/novnc.tar.gz' \
-)" && \
-    tar xzf /tmp/novnc.tar.gz -C /tmp && \
-    mv /tmp/noVNC-1.6.0 /app/static/novnc && \
-    rm /tmp/novnc.tar.gz
+RUN curl -sL https://github.com/novnc/noVNC/archive/refs/tags/v1.6.0.tar.gz | tar xz -C /tmp && \
+    mv /tmp/noVNC-1.6.0 /app/static/novnc
 
 COPY app/ /app/app/
 COPY static/index.html static/app.js static/style.css /app/static/
