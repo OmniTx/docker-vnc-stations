@@ -11,9 +11,9 @@ RUN pip install --no-cache-dir \
 
 WORKDIR /app
 
-# Download noVNC as tarball (much faster than git clone)
-ADD https://github.com/novnc/noVNC/archive/refs/tags/v1.5.0.tar.gz /tmp/novnc.tar.gz
-RUN tar xzf /tmp/novnc.tar.gz -C /tmp && \
+# Download noVNC using Python (handles GitHub redirects properly)
+RUN python3 -c "import urllib.request; urllib.request.urlretrieve('https://github.com/novnc/noVNC/archive/refs/tags/v1.5.0.tar.gz', '/tmp/novnc.tar.gz')" && \
+    tar xzf /tmp/novnc.tar.gz -C /tmp && \
     mv /tmp/noVNC-1.5.0 /app/static/novnc && \
     rm /tmp/novnc.tar.gz
 
