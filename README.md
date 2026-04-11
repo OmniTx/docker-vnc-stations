@@ -2,6 +2,10 @@
 
 A self-hosted, Dockerized web application for monitoring and controlling multiple VNC-connected remote desktops from a single browser tab. Built as a browser-based alternative to MightyViewer.
 
+<div align="center">
+  <img src="data/images/preview.png" alt="Dashboard Preview" width="100%" />
+</div>
+
 ## Deployment
 
 ### Option 1: Docker Compose (CLI)
