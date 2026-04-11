@@ -7,7 +7,7 @@ A self-hosted, Dockerized web application for monitoring and controlling multipl
 ### Option 1: Docker Compose (CLI)
 
 ```bash
-git clone https://github.com/YOUR_USER/docker-vnc-stations.git
+git clone https://github.com/OmniTx/docker-vnc-stations.git
 cd docker-vnc-stations
 docker compose up --build -d
 ```
@@ -16,7 +16,7 @@ docker compose up --build -d
 
 1. In Portainer, go to **Stacks** → **Add stack**
 2. Select **Repository** as the build method
-3. Set the repository URL to your GitHub repo: `https://github.com/YOUR_USER/docker-vnc-stations`
+3. Set the repository URL to your GitHub repo: `https://github.com/OmniTx/docker-vnc-stations`
 4. Branch: `main`
 5. Compose path: `docker-compose.yml`
 6. (Optional) Add environment variables:
