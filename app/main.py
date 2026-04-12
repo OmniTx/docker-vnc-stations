@@ -58,7 +58,7 @@ app = FastAPI(title="VNC Monitor Dashboard", version="1.0.0", lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
-    allow_credentials=True,
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -76,7 +76,8 @@ async def basic_auth_middleware(request: Request, call_next):
     try:
         settings = db.get_all_settings()
     except Exception:
-        return await call_next(request)
+        log.exception("Settings load failed; denying request (fail closed)")
+        return Response(status_code=503, content="Service temporarily unavailable")
 
     app_password = settings.get("app_password", "")
     app_username = settings.get("app_username", "admin")

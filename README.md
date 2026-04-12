@@ -2,10 +2,6 @@
 
 A self-hosted, Dockerized web application for monitoring and controlling multiple VNC-connected remote desktops from a single browser tab. Built as a browser-based alternative to MightyViewer.
 
-<div align="center">
-  <img src="data/images/preview.png" alt="Dashboard Preview" width="100%" />
-</div>
-
 ## Deployment
 
 ### Option 1: Docker Compose (CLI)
@@ -98,12 +94,15 @@ To protect the web UI with a password:
 
 The browser will prompt for credentials on the next page load. To disable auth, clear the password field.
 
+**Network trust:** Until Basic Auth is configured, anyone who can reach the dashboard host can use the REST API, including endpoints that return VNC credentials for a device. Run only on networks you trust, or enable Basic Auth before exposing the service.
+
 ## Environment Variables
 
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `VNC_ENCRYPTION_KEY` | `vnc-monitor-default-key-change-me` | AES-256 encryption key for stored VNC passwords |
 | `HEALTH_CHECK_INTERVAL` | `30` | Seconds between health check pings |
+| `WEBSOCKIFY_DEBUG` | (unset) | Set to `1`, `true`, or `yes` to send websockify **stderr** to the container process logs (default: discarded) |
 
 Set these in `docker-compose.yml` or `.env` file.
 

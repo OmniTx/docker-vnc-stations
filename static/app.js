@@ -22,6 +22,7 @@ const state = {
     dragDeviceId: null,
     sse: null,
     importPreview: null,
+    lastSseProxyIds: new Set(),
 };
 
 // ═══════════════════════════════════════════════════════════════════════
@@ -1082,14 +1083,26 @@ function connectSSE() {
                 }
 
                 // Update proxy info
-                for (const [idStr, info] of Object.entries(data.proxies || {})) {
-                    const id = parseInt(idStr);
+                const proxies = data.proxies || {};
+                for (const [idStr, info] of Object.entries(proxies)) {
+                    const id = parseInt(idStr, 10);
                     const device = state.devices.find(d => d.id === id);
                     if (device) {
                         device.ws_port = info.port;
                         device.proxy_status = info.status;
                     }
                 }
+                const proxyIds = new Set(Object.keys(proxies).map(s => parseInt(s, 10)));
+                for (const id of state.lastSseProxyIds) {
+                    if (!proxyIds.has(id)) {
+                        const device = state.devices.find(d => d.id === id);
+                        if (device) {
+                            device.ws_port = null;
+                            device.proxy_status = 'stopped';
+                        }
+                    }
+                }
+                state.lastSseProxyIds = proxyIds;
 
                 updateOnlineCount();
             }

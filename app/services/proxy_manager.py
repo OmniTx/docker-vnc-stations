@@ -1,5 +1,6 @@
 """Manages websockify child processes — one per VNC device."""
 
+import os
 import subprocess
 import logging
 import threading
@@ -9,6 +10,15 @@ log = logging.getLogger("proxy_manager")
 
 PORT_START = 6100
 PORT_END = 6199
+
+
+def _websockify_stdio() -> tuple:
+    """Return (stdout, stderr) for websockify child; inherit stderr when debugging."""
+    if os.environ.get("WEBSOCKIFY_DEBUG", "").strip().lower() in (
+        "1", "true", "yes", "on",
+    ):
+        return subprocess.DEVNULL, None
+    return subprocess.DEVNULL, subprocess.DEVNULL
 
 
 class ProxyManager:
@@ -28,6 +38,23 @@ class ProxyManager:
                 return p
         return None
 
+    def _reap_proxy_unlocked(self, device_id: int, info: dict) -> None:
+        """Remove a dead proxy entry, free its port, and reap the child. Lock held."""
+        self._proxies.pop(device_id, None)
+        self._used_ports.discard(info["port"])
+        proc = info["process"]
+        if proc.poll() is None:
+            proc.terminate()
+            try:
+                proc.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                proc.kill()
+        else:
+            try:
+                proc.wait(timeout=0)
+            except Exception:
+                pass
+
     # ── public API ─────────────────────────────────────────────────────
 
     def start(self, device_id: int, host: str, vnc_port: int) -> Optional[int]:
@@ -42,8 +69,7 @@ class ProxyManager:
                 if existing["process"].poll() is None:
                     return existing["port"]
                 # Process died — clean up
-                self._used_ports.discard(existing["port"])
-                del self._proxies[device_id]
+                self._reap_proxy_unlocked(device_id, existing)
 
             port = self._next_port()
             if port is None:
@@ -54,11 +80,12 @@ class ProxyManager:
             cmd = ["websockify", "--web", "/app/static/novnc",
                    f"0.0.0.0:{port}", target]
             log.info("Starting websockify: %s", " ".join(cmd))
+            out, err = _websockify_stdio()
             try:
                 proc = subprocess.Popen(
                     cmd,
-                    stdout=subprocess.DEVNULL,
-                    stderr=subprocess.DEVNULL,
+                    stdout=out,
+                    stderr=err,
                 )
             except Exception as exc:
                 log.error("Failed to start websockify for device %s: %s",
@@ -99,16 +126,22 @@ class ProxyManager:
         """Return the WebSocket port for a device, or None."""
         with self._lock:
             info = self._proxies.get(device_id)
-            if info and info["process"].poll() is None:
+            if not info:
+                return None
+            if info["process"].poll() is None:
                 return info["port"]
+            self._reap_proxy_unlocked(device_id, info)
             return None
 
     def get_status(self, device_id: int) -> str:
         """Return 'running' or 'stopped'."""
         with self._lock:
             info = self._proxies.get(device_id)
-            if info and info["process"].poll() is None:
+            if not info:
+                return "stopped"
+            if info["process"].poll() is None:
                 return "running"
+            self._reap_proxy_unlocked(device_id, info)
             return "stopped"
 
     def get_all(self) -> dict:
@@ -117,12 +150,17 @@ class ProxyManager:
             result = {}
             for did, info in list(self._proxies.items()):
                 alive = info["process"].poll() is None
-                result[did] = {
-                    "port": info["port"],
-                    "status": "running" if alive else "stopped",
-                }
-                if not alive:
-                    self._used_ports.discard(info["port"])
+                if alive:
+                    result[did] = {
+                        "port": info["port"],
+                        "status": "running",
+                    }
+                else:
+                    result[did] = {
+                        "port": info["port"],
+                        "status": "stopped",
+                    }
+                    self._reap_proxy_unlocked(did, info)
             return result
 
     def stop_all(self):
