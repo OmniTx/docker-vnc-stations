@@ -29,7 +29,9 @@ const state = {
 //  FPS & CONNECTION METRICS
 // ═══════════════════════════════════════════════════════════════════════
 
-const metrics = {}; // deviceId -> { frames, lastTime, fps, totalFrames, connectedAt, qualityLevel, compressionLevel }
+const metrics = {}; // deviceId -> { frames, lastTime, fps, totalFrames, connectedAt, qualityLevel, compressionLevel, lastCanvasData }
+
+let metricsIntervalId = null;
 
 function initMetrics(deviceId) {
     if (!metrics[deviceId]) {
@@ -41,9 +43,49 @@ function initMetrics(deviceId) {
             connectedAt: null,
             qualityLevel: 0,
             compressionLevel: 0,
+            lastCanvasData: null,
         };
     }
     return metrics[deviceId];
+}
+
+function trackCanvasChanges(deviceId, screenEl) {
+    const canvas = screenEl?.querySelector('canvas');
+    if (!canvas) return;
+
+    const m = metrics[deviceId];
+    if (!m) return;
+
+    try {
+        // Get a small sample of canvas data to detect changes
+        const ctx = canvas.getContext('2d', { willReadFrequently: true });
+        const width = canvas.width;
+        const height = canvas.height;
+
+        if (width === 0 || height === 0) return;
+
+        // Sample center pixel
+        const x = Math.floor(width / 2);
+        const y = Math.floor(height / 2);
+        const pixelData = ctx.getImageData(x, y, 1, 1).data;
+
+        // Compare with last frame
+        if (m.lastCanvasData) {
+            const changed = pixelData[0] !== m.lastCanvasData[0] ||
+                          pixelData[1] !== m.lastCanvasData[1] ||
+                          pixelData[2] !== m.lastCanvasData[2] ||
+                          pixelData[3] !== m.lastCanvasData[3];
+
+            if (changed) {
+                m.frames++;
+                m.totalFrames++;
+            }
+        }
+
+        m.lastCanvasData = new Uint8ClampedArray(pixelData);
+    } catch (e) {
+        // Canvas may not be ready yet
+    }
 }
 
 function updateFPS(deviceId) {
@@ -63,6 +105,61 @@ function updateFPS(deviceId) {
         }
     } else {
         m.lastTime = now;
+    }
+}
+
+function calculateFPS(deviceId) {
+    const m = metrics[deviceId];
+    if (!m) return 0;
+
+    const now = performance.now();
+    if (m.lastTime > 0) {
+        const elapsed = now - m.lastTime;
+        if (elapsed >= 1000) {
+            m.fps = Math.round((m.frames * 1000) / elapsed);
+            m.frames = 0;
+            m.lastTime = now;
+        }
+    }
+    return m.fps;
+}
+
+function startMetricsPolling() {
+    if (metricsIntervalId) return;
+
+    metricsIntervalId = setInterval(() => {
+        // Track canvas changes for all active tiles
+        for (const [deviceId, rfb] of Object.entries(state.rfbInstances)) {
+            const screenEl = $(`#tile-screen-${deviceId}`);
+            if (screenEl && rfb) {
+                trackCanvasChanges(parseInt(deviceId), screenEl);
+            }
+        }
+
+        // Track full control canvas changes
+        if (state.fullControlDeviceId) {
+            const screen = $('#fullcontrol-screen');
+            if (screen) {
+                trackCanvasChanges(state.fullControlDeviceId, screen);
+            }
+        }
+
+        // Calculate FPS for all devices
+        for (const deviceId of Object.keys(metrics)) {
+            calculateFPS(deviceId);
+        }
+
+        // Update full control display
+        if (state.fullControlDeviceId) {
+            updateFullControlMetrics();
+        }
+    }, 500); // Check every 500ms
+}
+
+function stopMetricsPolling() {
+    if (metricsIntervalId) {
+        clearInterval(metricsIntervalId);
+        metricsIntervalId = null;
     }
 }
 
@@ -538,11 +635,6 @@ async function connectTile(device) {
             state.remoteClipboard = e.detail.text;
         });
 
-        // FPS tracking for tiles
-        rfb.addEventListener('FBUComplete', () => {
-            updateFPS(device.id);
-        });
-
         state.rfbInstances[device.id] = rfb;
     } catch (err) {
         console.error('noVNC error for', device.name, err);
@@ -705,12 +797,6 @@ async function openFullControl(deviceId) {
 
         rfb.addEventListener('clipboard', (e) => {
             state.remoteClipboard = e.detail.text;
-        });
-
-        // FPS Tracking using global metrics
-        rfb.addEventListener('FBUComplete', () => {
-            updateFPS(deviceId);
-            updateFullControlMetrics();
         });
 
         state.fullControlRfb = rfb;
@@ -1470,15 +1556,11 @@ async function init() {
         // Connect SSE
         connectSSE();
 
-        // Update tile metrics every second
-        setInterval(updateTileMetrics, 1000);
+        // Start canvas polling for FPS tracking
+        startMetricsPolling();
 
-        // Update full control metrics every second
-        setInterval(() => {
-            if (state.fullControlDeviceId) {
-                updateFullControlMetrics();
-            }
-        }, 1000);
+        // Update tile metrics display every second
+        setInterval(updateTileMetrics, 1000);
 
     } catch (err) {
         console.error('Initialization error:', err);
