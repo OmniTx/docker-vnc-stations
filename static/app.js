@@ -26,6 +26,65 @@ const state = {
 };
 
 // ═══════════════════════════════════════════════════════════════════════
+//  FPS & CONNECTION METRICS
+// ═══════════════════════════════════════════════════════════════════════
+
+const metrics = {}; // deviceId -> { frames, lastTime, fps, totalFrames, connectedAt, qualityLevel, compressionLevel }
+
+function initMetrics(deviceId) {
+    if (!metrics[deviceId]) {
+        metrics[deviceId] = {
+            frames: 0,
+            lastTime: 0,
+            fps: 0,
+            totalFrames: 0,
+            connectedAt: null,
+            qualityLevel: 0,
+            compressionLevel: 0,
+        };
+    }
+    return metrics[deviceId];
+}
+
+function updateFPS(deviceId) {
+    const m = metrics[deviceId];
+    if (!m) return;
+
+    const now = performance.now();
+    m.frames++;
+    m.totalFrames++;
+
+    if (m.lastTime > 0) {
+        const elapsed = now - m.lastTime;
+        if (elapsed >= 1000) {
+            m.fps = Math.round((m.frames * 1000) / elapsed);
+            m.frames = 0;
+            m.lastTime = now;
+        }
+    } else {
+        m.lastTime = now;
+    }
+}
+
+function getUptime(deviceId) {
+    const m = metrics[deviceId];
+    if (!m || !m.connectedAt) return '--';
+
+    const elapsed = Date.now() - m.connectedAt;
+    const seconds = Math.floor(elapsed / 1000);
+    const minutes = Math.floor(seconds / 60);
+    const hours = Math.floor(minutes / 60);
+
+    if (hours > 0) return `${hours}h ${minutes % 60}m`;
+    if (minutes > 0) return `${minutes}m ${seconds % 60}s`;
+    return `${seconds}s`;
+}
+
+function resetMetrics(deviceId) {
+    delete metrics[deviceId];
+}
+
+// ═══════════════════════════════════════════════════════════════════════
 //  API CLIENT
 // ═══════════════════════════════════════════════════════════════════════
 
@@ -183,6 +242,7 @@ function renderDashboard() {
             html += `<div class="tile-overlay" id="tile-overlay-${device.id}">`;
             html += `<div class="tile-spinner"></div>`;
             html += `<span id="tile-status-text-${device.id}">Connecting...</span>`;
+            html += `<span id="tile-fps-${device.id}" class="tile-fps-overlay"></span>`;
             html += `</div></div>`;
             html += `<div class="tile-bottom">`;
             html += `<div class="tile-info">`;
@@ -218,6 +278,40 @@ function updateOnlineCount() {
     const online = state.devices.filter(d => d.health_status === 'online').length;
     const el = $('#online-count-text');
     if (el) el.textContent = `${online}/${total} Online`;
+}
+
+function updateTileMetrics() {
+    for (const [deviceId, m] of Object.entries(metrics)) {
+        const fpsEl = $(`#tile-fps-${deviceId}`);
+        if (fpsEl && m.fps > 0) {
+            fpsEl.textContent = `${m.fps} FPS`;
+            fpsEl.style.opacity = '1';
+        }
+    }
+}
+
+function updateFullControlMetrics() {
+    if (!state.fullControlDeviceId) return;
+
+    const m = metrics[state.fullControlDeviceId];
+    if (!m) return;
+
+    const fpsEl = $('#fc-fps');
+    const uptimeEl = $('#fc-uptime');
+    const qualityEl = $('#fc-quality-display');
+    const resolutionEl = $('#fc-resolution');
+
+    const screen = $('#fullcontrol-screen');
+    const canvas = screen?.querySelector('canvas');
+    const resolution = canvas ? `${canvas.width}×${canvas.height}` : '--×--';
+
+    const qualityLabels = ['Auto', 'Low', 'Medium', 'High'];
+    const qualityLabel = qualityLabels[m.qualityLevel] || 'Auto';
+
+    if (fpsEl) fpsEl.textContent = `${m.fps} FPS`;
+    if (uptimeEl) uptimeEl.textContent = `↑ ${getUptime(state.fullControlDeviceId)}`;
+    if (qualityEl) qualityEl.textContent = `Q: ${qualityLabel}`;
+    if (resolutionEl) resolutionEl.textContent = resolution;
 }
 
 function applyGridColumns() {
@@ -410,14 +504,24 @@ async function connectTile(device) {
         rfb.qualityLevel = qs.quality;
         rfb.compressionLevel = qs.compression;
 
+        // Initialize metrics
+        const m = initMetrics(device.id);
+        m.qualityLevel = qs.quality;
+        m.compressionLevel = qs.compression;
+
         rfb.addEventListener('connect', () => {
             if (overlayEl) overlayEl.classList.add('connected');
             state.reconnectAttempts[device.id] = 0;
+            m.connectedAt = Date.now();
+            m.lastTime = 0;
+            m.frames = 0;
+            m.fps = 0;
         });
 
         rfb.addEventListener('disconnect', (e) => {
             if (overlayEl) overlayEl.classList.remove('connected');
             if (statusTextEl) statusTextEl.textContent = e.detail.clean ? 'Disconnected' : 'Connection lost';
+            resetMetrics(device.id);
             delete state.rfbInstances[device.id];
             maybeReconnect(device);
         });
@@ -434,10 +538,16 @@ async function connectTile(device) {
             state.remoteClipboard = e.detail.text;
         });
 
+        // FPS tracking for tiles
+        rfb.addEventListener('FBUComplete', () => {
+            updateFPS(device.id);
+        });
+
         state.rfbInstances[device.id] = rfb;
     } catch (err) {
         console.error('noVNC error for', device.name, err);
         if (statusTextEl) statusTextEl.textContent = 'Connection error';
+        resetMetrics(device.id);
         maybeReconnect(device);
     }
 }
@@ -449,6 +559,7 @@ function disconnectTile(deviceId) {
         delete state.rfbInstances[deviceId];
     }
     clearReconnect(deviceId);
+    resetMetrics(deviceId);
 }
 
 function connectAllTiles() {
@@ -558,14 +669,33 @@ async function openFullControl(deviceId) {
         rfb.qualityLevel = qs.quality;
         rfb.compressionLevel = qs.compression;
 
+        // Initialize metrics for full control
+        const m = initMetrics(deviceId);
+        m.qualityLevel = qs.quality;
+        m.compressionLevel = qs.compression;
+
         rfb.addEventListener('connect', () => {
             statusEl.textContent = 'Connected';
             statusEl.style.color = 'var(--success)';
+            m.connectedAt = Date.now();
+            m.lastTime = 0;
+            m.frames = 0;
+            m.fps = 0;
+            updateFullControlMetrics();
         });
 
         rfb.addEventListener('disconnect', (e) => {
             statusEl.textContent = e.detail.clean ? 'Disconnected' : 'Connection lost';
             statusEl.style.color = 'var(--danger)';
+            resetMetrics(deviceId);
+            const fpsEl = $('#fc-fps');
+            const uptimeEl = $('#fc-uptime');
+            const qualityEl = $('#fc-quality-display');
+            const resolutionEl = $('#fc-resolution');
+            if (fpsEl) fpsEl.textContent = '-- FPS';
+            if (uptimeEl) uptimeEl.textContent = '--';
+            if (qualityEl) qualityEl.textContent = 'Q: --';
+            if (resolutionEl) resolutionEl.textContent = '--×--';
         });
 
         rfb.addEventListener('credentialsrequired', () => {
@@ -577,21 +707,10 @@ async function openFullControl(deviceId) {
             state.remoteClipboard = e.detail.text;
         });
 
-        // FPS Tracking
-        let frames = 0;
-        let lastTime = performance.now();
-        const metricsEl = $('#fc-metrics');
-        if (metricsEl) metricsEl.textContent = '-- FPS';
-
+        // FPS Tracking using global metrics
         rfb.addEventListener('FBUComplete', () => {
-            frames++;
-            const now = performance.now();
-            if (now - lastTime >= 1000) {
-                const fps = Math.round((frames * 1000) / (now - lastTime));
-                if (metricsEl) metricsEl.textContent = `${fps} FPS`;
-                frames = 0;
-                lastTime = now;
-            }
+            updateFPS(deviceId);
+            updateFullControlMetrics();
         });
 
         state.fullControlRfb = rfb;
@@ -620,6 +739,13 @@ function setFullControlQuality(mode) {
     const qs = getQualitySettings('full-' + mode);
     state.fullControlRfb.qualityLevel = qs.quality;
     state.fullControlRfb.compressionLevel = qs.compression;
+
+    // Update metrics
+    if (state.fullControlDeviceId && metrics[state.fullControlDeviceId]) {
+        metrics[state.fullControlDeviceId].qualityLevel = qs.quality;
+        metrics[state.fullControlDeviceId].compressionLevel = qs.compression;
+        updateFullControlMetrics();
+    }
 }
 
 // ═══════════════════════════════════════════════════════════════════════
@@ -1343,6 +1469,16 @@ async function init() {
 
         // Connect SSE
         connectSSE();
+
+        // Update tile metrics every second
+        setInterval(updateTileMetrics, 1000);
+
+        // Update full control metrics every second
+        setInterval(() => {
+            if (state.fullControlDeviceId) {
+                updateFullControlMetrics();
+            }
+        }, 1000);
 
     } catch (err) {
         console.error('Initialization error:', err);
