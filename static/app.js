@@ -26,145 +26,27 @@ const state = {
 };
 
 // ═══════════════════════════════════════════════════════════════════════
-//  FPS & CONNECTION METRICS
+//  CONNECTION METRICS
 // ═══════════════════════════════════════════════════════════════════════
 
-const metrics = {}; // deviceId -> { frames, lastTime, fps, totalFrames, connectedAt, qualityLevel, compressionLevel, lastCanvasData }
+const connectionMetrics = {}; // deviceId -> { connectedAt, resolution }
 
-let metricsIntervalId = null;
-
-function initMetrics(deviceId) {
-    if (!metrics[deviceId]) {
-        metrics[deviceId] = {
-            frames: 0,
-            lastTime: 0,
-            fps: 0,
-            totalFrames: 0,
+function initConnectionMetrics(deviceId) {
+    if (!connectionMetrics[deviceId]) {
+        connectionMetrics[deviceId] = {
             connectedAt: null,
-            qualityLevel: 0,
-            compressionLevel: 0,
-            lastCanvasData: null,
+            resolution: '--×--',
         };
     }
-    return metrics[deviceId];
+    return connectionMetrics[deviceId];
 }
 
-function trackCanvasChanges(deviceId, screenEl) {
-    const canvas = screenEl?.querySelector('canvas');
-    if (!canvas) return;
-
-    const m = metrics[deviceId];
-    if (!m) return;
-
-    try {
-        // Get a small sample of canvas data to detect changes
-        const ctx = canvas.getContext('2d', { willReadFrequently: true });
-        const width = canvas.width;
-        const height = canvas.height;
-
-        if (width === 0 || height === 0) return;
-
-        // Sample center pixel
-        const x = Math.floor(width / 2);
-        const y = Math.floor(height / 2);
-        const pixelData = ctx.getImageData(x, y, 1, 1).data;
-
-        // Compare with last frame
-        if (m.lastCanvasData) {
-            const changed = pixelData[0] !== m.lastCanvasData[0] ||
-                          pixelData[1] !== m.lastCanvasData[1] ||
-                          pixelData[2] !== m.lastCanvasData[2] ||
-                          pixelData[3] !== m.lastCanvasData[3];
-
-            if (changed) {
-                m.frames++;
-                m.totalFrames++;
-            }
-        }
-
-        m.lastCanvasData = new Uint8ClampedArray(pixelData);
-    } catch (e) {
-        // Canvas may not be ready yet
-    }
+function resetConnectionMetrics(deviceId) {
+    delete connectionMetrics[deviceId];
 }
 
-function updateFPS(deviceId) {
-    const m = metrics[deviceId];
-    if (!m) return;
-
-    const now = performance.now();
-    m.frames++;
-    m.totalFrames++;
-
-    if (m.lastTime > 0) {
-        const elapsed = now - m.lastTime;
-        if (elapsed >= 1000) {
-            m.fps = Math.round((m.frames * 1000) / elapsed);
-            m.frames = 0;
-            m.lastTime = now;
-        }
-    } else {
-        m.lastTime = now;
-    }
-}
-
-function calculateFPS(deviceId) {
-    const m = metrics[deviceId];
-    if (!m) return 0;
-
-    const now = performance.now();
-    if (m.lastTime > 0) {
-        const elapsed = now - m.lastTime;
-        if (elapsed >= 1000) {
-            m.fps = Math.round((m.frames * 1000) / elapsed);
-            m.frames = 0;
-            m.lastTime = now;
-        }
-    }
-    return m.fps;
-}
-
-function startMetricsPolling() {
-    if (metricsIntervalId) return;
-
-    metricsIntervalId = setInterval(() => {
-        // Track canvas changes for all active tiles
-        for (const [deviceId, rfb] of Object.entries(state.rfbInstances)) {
-            const screenEl = $(`#tile-screen-${deviceId}`);
-            if (screenEl && rfb) {
-                trackCanvasChanges(parseInt(deviceId), screenEl);
-            }
-        }
-
-        // Track full control canvas changes
-        if (state.fullControlDeviceId) {
-            const screen = $('#fullcontrol-screen');
-            if (screen) {
-                trackCanvasChanges(state.fullControlDeviceId, screen);
-            }
-        }
-
-        // Calculate FPS for all devices
-        for (const deviceId of Object.keys(metrics)) {
-            calculateFPS(deviceId);
-        }
-
-        // Update full control display
-        if (state.fullControlDeviceId) {
-            updateFullControlMetrics();
-        }
-    }, 500); // Check every 500ms
-}
-
-function stopMetricsPolling() {
-    if (metricsIntervalId) {
-        clearInterval(metricsIntervalId);
-        metricsIntervalId = null;
-    }
-}
-
-function getUptime(deviceId) {
-    const m = metrics[deviceId];
+function getConnectionUptime(deviceId) {
+    const m = connectionMetrics[deviceId];
     if (!m || !m.connectedAt) return '--';
 
     const elapsed = Date.now() - m.connectedAt;
@@ -177,8 +59,23 @@ function getUptime(deviceId) {
     return `${seconds}s`;
 }
 
-function resetMetrics(deviceId) {
-    delete metrics[deviceId];
+function updateConnectionMetrics() {
+    if (!state.fullControlDeviceId) return;
+
+    const m = connectionMetrics[state.fullControlDeviceId];
+    if (!m) return;
+
+    const uptimeEl = $('#fc-uptime');
+    const resolutionEl = $('#fc-resolution');
+
+    const screen = $('#fullcontrol-screen');
+    const canvas = screen?.querySelector('canvas');
+    if (canvas && canvas.width > 0 && canvas.height > 0) {
+        m.resolution = `${canvas.width}×${canvas.height}`;
+    }
+
+    if (uptimeEl) uptimeEl.textContent = `↑ ${getConnectionUptime(state.fullControlDeviceId)}`;
+    if (resolutionEl) resolutionEl.textContent = m.resolution;
 }
 
 // ═══════════════════════════════════════════════════════════════════════
@@ -339,7 +236,6 @@ function renderDashboard() {
             html += `<div class="tile-overlay" id="tile-overlay-${device.id}">`;
             html += `<div class="tile-spinner"></div>`;
             html += `<span id="tile-status-text-${device.id}">Connecting...</span>`;
-            html += `<span id="tile-fps-${device.id}" class="tile-fps-overlay"></span>`;
             html += `</div></div>`;
             html += `<div class="tile-bottom">`;
             html += `<div class="tile-info">`;
@@ -375,40 +271,6 @@ function updateOnlineCount() {
     const online = state.devices.filter(d => d.health_status === 'online').length;
     const el = $('#online-count-text');
     if (el) el.textContent = `${online}/${total} Online`;
-}
-
-function updateTileMetrics() {
-    for (const [deviceId, m] of Object.entries(metrics)) {
-        const fpsEl = $(`#tile-fps-${deviceId}`);
-        if (fpsEl && m.fps > 0) {
-            fpsEl.textContent = `${m.fps} FPS`;
-            fpsEl.style.opacity = '1';
-        }
-    }
-}
-
-function updateFullControlMetrics() {
-    if (!state.fullControlDeviceId) return;
-
-    const m = metrics[state.fullControlDeviceId];
-    if (!m) return;
-
-    const fpsEl = $('#fc-fps');
-    const uptimeEl = $('#fc-uptime');
-    const qualityEl = $('#fc-quality-display');
-    const resolutionEl = $('#fc-resolution');
-
-    const screen = $('#fullcontrol-screen');
-    const canvas = screen?.querySelector('canvas');
-    const resolution = canvas ? `${canvas.width}×${canvas.height}` : '--×--';
-
-    const qualityLabels = ['Auto', 'Low', 'Medium', 'High'];
-    const qualityLabel = qualityLabels[m.qualityLevel] || 'Auto';
-
-    if (fpsEl) fpsEl.textContent = `${m.fps} FPS`;
-    if (uptimeEl) uptimeEl.textContent = `↑ ${getUptime(state.fullControlDeviceId)}`;
-    if (qualityEl) qualityEl.textContent = `Q: ${qualityLabel}`;
-    if (resolutionEl) resolutionEl.textContent = resolution;
 }
 
 function applyGridColumns() {
@@ -597,28 +459,14 @@ async function connectTile(device) {
         rfb.scaleViewport = true;
         rfb.background = '#0a0a0a';
 
-        const qs = getQualitySettings('tile');
-        rfb.qualityLevel = qs.quality;
-        rfb.compressionLevel = qs.compression;
-
-        // Initialize metrics
-        const m = initMetrics(device.id);
-        m.qualityLevel = qs.quality;
-        m.compressionLevel = qs.compression;
-
         rfb.addEventListener('connect', () => {
             if (overlayEl) overlayEl.classList.add('connected');
             state.reconnectAttempts[device.id] = 0;
-            m.connectedAt = Date.now();
-            m.lastTime = 0;
-            m.frames = 0;
-            m.fps = 0;
         });
 
         rfb.addEventListener('disconnect', (e) => {
             if (overlayEl) overlayEl.classList.remove('connected');
             if (statusTextEl) statusTextEl.textContent = e.detail.clean ? 'Disconnected' : 'Connection lost';
-            resetMetrics(device.id);
             delete state.rfbInstances[device.id];
             maybeReconnect(device);
         });
@@ -639,7 +487,6 @@ async function connectTile(device) {
     } catch (err) {
         console.error('noVNC error for', device.name, err);
         if (statusTextEl) statusTextEl.textContent = 'Connection error';
-        resetMetrics(device.id);
         maybeReconnect(device);
     }
 }
@@ -651,7 +498,6 @@ function disconnectTile(deviceId) {
         delete state.rfbInstances[deviceId];
     }
     clearReconnect(deviceId);
-    resetMetrics(deviceId);
 }
 
 function connectAllTiles() {
@@ -761,32 +607,22 @@ async function openFullControl(deviceId) {
         rfb.qualityLevel = qs.quality;
         rfb.compressionLevel = qs.compression;
 
-        // Initialize metrics for full control
-        const m = initMetrics(deviceId);
-        m.qualityLevel = qs.quality;
-        m.compressionLevel = qs.compression;
+        // Initialize connection metrics
+        const m = initConnectionMetrics(deviceId);
+        m.connectedAt = Date.now();
 
         rfb.addEventListener('connect', () => {
             statusEl.textContent = 'Connected';
             statusEl.style.color = 'var(--success)';
-            m.connectedAt = Date.now();
-            m.lastTime = 0;
-            m.frames = 0;
-            m.fps = 0;
-            updateFullControlMetrics();
         });
 
         rfb.addEventListener('disconnect', (e) => {
             statusEl.textContent = e.detail.clean ? 'Disconnected' : 'Connection lost';
             statusEl.style.color = 'var(--danger)';
-            resetMetrics(deviceId);
-            const fpsEl = $('#fc-fps');
+            resetConnectionMetrics(deviceId);
             const uptimeEl = $('#fc-uptime');
-            const qualityEl = $('#fc-quality-display');
             const resolutionEl = $('#fc-resolution');
-            if (fpsEl) fpsEl.textContent = '-- FPS';
             if (uptimeEl) uptimeEl.textContent = '--';
-            if (qualityEl) qualityEl.textContent = 'Q: --';
             if (resolutionEl) resolutionEl.textContent = '--×--';
         });
 
@@ -825,13 +661,6 @@ function setFullControlQuality(mode) {
     const qs = getQualitySettings('full-' + mode);
     state.fullControlRfb.qualityLevel = qs.quality;
     state.fullControlRfb.compressionLevel = qs.compression;
-
-    // Update metrics
-    if (state.fullControlDeviceId && metrics[state.fullControlDeviceId]) {
-        metrics[state.fullControlDeviceId].qualityLevel = qs.quality;
-        metrics[state.fullControlDeviceId].compressionLevel = qs.compression;
-        updateFullControlMetrics();
-    }
 }
 
 // ═══════════════════════════════════════════════════════════════════════
@@ -1556,11 +1385,8 @@ async function init() {
         // Connect SSE
         connectSSE();
 
-        // Start canvas polling for FPS tracking
-        startMetricsPolling();
-
-        // Update tile metrics display every second
-        setInterval(updateTileMetrics, 1000);
+        // Update connection metrics display every second
+        setInterval(updateConnectionMetrics, 1000);
 
     } catch (err) {
         console.error('Initialization error:', err);
