@@ -29,12 +29,12 @@ const state = {
 //  CONNECTION METRICS
 // ═══════════════════════════════════════════════════════════════════════
 
-const connectionMetrics = {}; // deviceId -> { connectedAt, resolution }
+const connectionMetrics = {}; // deviceId -> { latency, resolution }
 
 function initConnectionMetrics(deviceId) {
     if (!connectionMetrics[deviceId]) {
         connectionMetrics[deviceId] = {
-            connectedAt: null,
+            latency: 0,
             resolution: '--×--',
         };
     }
@@ -45,27 +45,13 @@ function resetConnectionMetrics(deviceId) {
     delete connectionMetrics[deviceId];
 }
 
-function getConnectionUptime(deviceId) {
-    const m = connectionMetrics[deviceId];
-    if (!m || !m.connectedAt) return '--';
-
-    const elapsed = Date.now() - m.connectedAt;
-    const seconds = Math.floor(elapsed / 1000);
-    const minutes = Math.floor(seconds / 60);
-    const hours = Math.floor(minutes / 60);
-
-    if (hours > 0) return `${hours}h ${minutes % 60}m`;
-    if (minutes > 0) return `${minutes}m ${seconds % 60}s`;
-    return `${seconds}s`;
-}
-
 function updateConnectionMetrics() {
     if (!state.fullControlDeviceId) return;
 
     const m = connectionMetrics[state.fullControlDeviceId];
     if (!m) return;
 
-    const uptimeEl = $('#fc-uptime');
+    const latencyEl = $('#fc-latency');
     const resolutionEl = $('#fc-resolution');
 
     const screen = $('#fullcontrol-screen');
@@ -74,7 +60,8 @@ function updateConnectionMetrics() {
         m.resolution = `${canvas.width}×${canvas.height}`;
     }
 
-    if (uptimeEl) uptimeEl.textContent = `↑ ${getConnectionUptime(state.fullControlDeviceId)}`;
+    const latencyText = m.latency > 0 ? `${m.latency.toFixed(1)}ms` : '--';
+    if (latencyEl) latencyEl.textContent = latencyText;
     if (resolutionEl) resolutionEl.textContent = m.resolution;
 }
 
@@ -609,7 +596,6 @@ async function openFullControl(deviceId) {
 
         // Initialize connection metrics
         const m = initConnectionMetrics(deviceId);
-        m.connectedAt = Date.now();
 
         rfb.addEventListener('connect', () => {
             statusEl.textContent = 'Connected';
@@ -620,9 +606,9 @@ async function openFullControl(deviceId) {
             statusEl.textContent = e.detail.clean ? 'Disconnected' : 'Connection lost';
             statusEl.style.color = 'var(--danger)';
             resetConnectionMetrics(deviceId);
-            const uptimeEl = $('#fc-uptime');
+            const latencyEl = $('#fc-latency');
             const resolutionEl = $('#fc-resolution');
-            if (uptimeEl) uptimeEl.textContent = '--';
+            if (latencyEl) latencyEl.textContent = '--';
             if (resolutionEl) resolutionEl.textContent = '--×--';
         });
 
@@ -1133,6 +1119,21 @@ function connectSSE() {
                         device.proxy_status = info.status;
                     }
                 }
+
+                // Update latency metrics
+                const latencies = data.latencies || {};
+                for (const [idStr, latency] of Object.entries(latencies)) {
+                    const id = parseInt(idStr, 10);
+                    if (connectionMetrics[id]) {
+                        connectionMetrics[id].latency = parseFloat(latency) || 0;
+                    }
+                    // Also store on device for potential tile display
+                    const device = state.devices.find(d => d.id === id);
+                    if (device) {
+                        device.latency = parseFloat(latency) || 0;
+                    }
+                }
+
                 const proxyIds = new Set(Object.keys(proxies).map(s => parseInt(s, 10)));
                 for (const id of state.lastSseProxyIds) {
                     if (!proxyIds.has(id)) {

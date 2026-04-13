@@ -119,20 +119,26 @@ async def sse_events():
 
     async def generate():
         last_statuses = {}
+        last_latencies = {}
         last_proxies = {}
         while True:
             try:
                 current_statuses = health_checker.get_all_statuses()
+                current_latencies = health_checker.get_all_latencies()
                 current_proxies = proxy_manager.get_all()
 
-                if current_statuses != last_statuses or current_proxies != last_proxies:
+                if (current_statuses != last_statuses or 
+                    current_latencies != last_latencies or 
+                    current_proxies != last_proxies):
                     payload = {
                         "type": "status_update",
                         "health": {str(k): v for k, v in current_statuses.items()},
+                        "latencies": {str(k): v for k, v in current_latencies.items()},
                         "proxies": {str(k): v for k, v in current_proxies.items()},
                     }
                     yield f"data: {json.dumps(payload)}\n\n"
                     last_statuses = dict(current_statuses)
+                    last_latencies = dict(current_latencies)
                     last_proxies = dict(current_proxies)
                 else:
                     yield ": keepalive\n\n"
