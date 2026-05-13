@@ -270,19 +270,19 @@ function updateToggleAllButton() {
         // Show Disconnect All state
         btn.classList.add('toolbar-btn--danger-ghost');
         btn.title = 'Disconnect All';
-        btn.innerHTML = `<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" stroke-width="2" stroke-linecap="square"/></svg>`;
+        btn.innerHTML = `<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" stroke-width="2" stroke-linecap="square"/></svg><span class="toolbar-btn-text">Disconnect All</span>`;
     } else {
         // Show Connect All state
         btn.classList.remove('toolbar-btn--danger-ghost');
         btn.title = 'Connect All';
-        btn.innerHTML = `<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M2 8l4 4 8-8" stroke="currentColor" stroke-width="2" stroke-linecap="square"/></svg>`;
+        btn.innerHTML = `<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M2 8l4 4 8-8" stroke="currentColor" stroke-width="2" stroke-linecap="square"/></svg><span class="toolbar-btn-text">Connect All</span>`;
     }
 }
 
 function applyGridColumns() {
     const cols = state.settings.grid_columns || 'auto';
     const grids = $$('.device-grid');
-    const tileMin = $('#zoom-slider')?.value || 280;
+    const tileMin = $('#zoom-slider')?.value || 480;
 
     grids.forEach(grid => {
         if (cols === 'auto') {
