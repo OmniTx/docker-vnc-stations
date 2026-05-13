@@ -25,6 +25,24 @@ async def stop_proxy(device_id: int):
     return {"device_id": device_id, "status": "stopped"}
 
 
+@router.post("/api/proxy/start-all")
+async def start_all_proxies():
+    devices = db.get_all_devices()
+    started = 0
+    for d in devices:
+        if d.get("enabled"):
+            port = proxy_manager.start(d["id"], d["host"], d["port"])
+            if port is not None:
+                started += 1
+    return {"status": "started", "count": started}
+
+
+@router.post("/api/proxy/stop-all")
+async def stop_all_proxies():
+    proxy_manager.stop_all()
+    return {"status": "all_stopped"}
+
+
 @router.post("/api/proxy/{device_id}/restart")
 async def restart_proxy(device_id: int):
     device = db.get_device(device_id)

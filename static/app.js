@@ -104,6 +104,8 @@ const api = {
     confirmImport(data) { return this._fetch('/api/import/json/confirm', { method: 'POST', body: JSON.stringify(data) }); },
     startProxy(id)  { return this._fetch(`/api/proxy/${id}/start`, { method: 'POST' }); },
     stopProxy(id)   { return this._fetch(`/api/proxy/${id}/stop`, { method: 'POST' }); },
+    startAllProxies(){ return this._fetch('/api/proxy/start-all', { method: 'POST' }); },
+    stopAllProxies(){ return this._fetch('/api/proxy/stop-all', { method: 'POST' }); },
 };
 
 // ═══════════════════════════════════════════════════════════════════════
@@ -258,6 +260,23 @@ function updateOnlineCount() {
     const online = state.devices.filter(d => d.health_status === 'online').length;
     const el = $('#online-count-text');
     if (el) el.textContent = `${online}/${total} Online`;
+}
+
+function updateToggleAllButton() {
+    const btn = $('#btn-toggle-all');
+    if (!btn) return;
+    const activeCount = state.devices.filter(d => d.ws_port).length;
+    if (activeCount > 0) {
+        // Show Disconnect All state
+        btn.classList.add('toolbar-btn--danger-ghost');
+        btn.title = 'Disconnect All';
+        btn.innerHTML = `<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" stroke-width="2" stroke-linecap="square"/></svg>`;
+    } else {
+        // Show Connect All state
+        btn.classList.remove('toolbar-btn--danger-ghost');
+        btn.title = 'Connect All';
+        btn.innerHTML = `<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M2 8l4 4 8-8" stroke="currentColor" stroke-width="2" stroke-linecap="square"/></svg>`;
+    }
 }
 
 function applyGridColumns() {
@@ -493,12 +512,14 @@ function connectAllTiles() {
             connectTile(device);
         }
     }
+    updateToggleAllButton();
 }
 
 function disconnectAllTiles() {
     for (const id of Object.keys(state.rfbInstances)) {
         disconnectTile(parseInt(id));
     }
+    updateToggleAllButton();
 }
 
 // ═══════════════════════════════════════════════════════════════════════
@@ -1147,6 +1168,7 @@ function connectSSE() {
                 state.lastSseProxyIds = proxyIds;
 
                 updateOnlineCount();
+                updateToggleAllButton();
             }
         } catch (e) { /* ignore non-JSON */ }
     };
@@ -1273,6 +1295,32 @@ function bindEvents() {
     $('#btn-expand-all').addEventListener('click', () => {
         state.collapsedGroups.clear();
         renderDashboard();
+    });
+
+    // Toggle All (Connect / Disconnect)
+    $('#btn-toggle-all').addEventListener('click', async () => {
+        const activeCount = state.devices.filter(d => d.ws_port).length;
+        if (activeCount > 0) {
+            if (confirm('Disconnect all VNC stations and stop all proxy processes?')) {
+                try {
+                    disconnectAllTiles();
+                    await api.stopAllProxies();
+                    toast('All stations disconnected', 'success');
+                } catch (err) {
+                    toast('Error disconnecting all: ' + err.message, 'error');
+                }
+            }
+        } else {
+            // Start all enabled devices
+            toast('Connecting to all enabled devices...', 'info');
+            try {
+                await api.startAllProxies();
+                // We rely on SSE to update the state and UI, but we can optimistically say it's done
+                toast('Started connection process', 'success');
+            } catch (err) {
+                toast('Error connecting all: ' + err.message, 'error');
+            }
+        }
     });
 
     // Fullscreen mode
