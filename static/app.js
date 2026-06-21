@@ -445,7 +445,7 @@ async function connectTile(device) {
     if (overlayEl) overlayEl.classList.remove('connected');
 
     const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const wsUrl = `${wsProtocol}//${location.hostname}:${device.ws_port}`;
+    const wsUrl = `${wsProtocol}//${location.host}/api/ws/${device.id}`;
     let password = '';
 
     try {
@@ -586,7 +586,7 @@ async function openFullControl(deviceId) {
     state.fullControlDeviceId = deviceId;
 
     const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const wsUrl = `${wsProtocol}//${location.hostname}:${device.ws_port}`;
+    const wsUrl = `${wsProtocol}//${location.host}/api/ws/${device.id}`;
     let password = '';
 
     try {

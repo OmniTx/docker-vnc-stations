@@ -35,12 +35,8 @@ VIEWER_GRACE_SECONDS = int(os.environ.get("VIEWER_GRACE_SECONDS", "10"))
 
 
 def _websockify_stdio() -> tuple:
-    """Return (stdout, stderr) for websockify child; inherit stderr when debugging."""
-    if os.environ.get("WEBSOCKIFY_DEBUG", "").strip().lower() in (
-        "1", "true", "yes", "on",
-    ):
-        return subprocess.DEVNULL, None
-    return subprocess.DEVNULL, subprocess.DEVNULL
+    """Return (stdout, stderr) for websockify child; inherit stderr to see errors."""
+    return subprocess.DEVNULL, None
 
 
 def _tcp_reachable(host: str, port: int, timeout: float = 5.0) -> bool:
