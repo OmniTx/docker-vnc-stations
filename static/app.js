@@ -1130,15 +1130,25 @@ function connectSSE() {
                     }
                 }
 
-                // Update proxy info
+                // Update proxy info and auto-connect tiles that just got a port
                 const proxies = data.proxies || {};
+                const devicesToConnect = [];
                 for (const [idStr, info] of Object.entries(proxies)) {
                     const id = parseInt(idStr, 10);
                     const device = state.devices.find(d => d.id === id);
                     if (device) {
+                        const hadPort = device.ws_port;
                         device.ws_port = info.port;
                         device.proxy_status = info.status;
+                        // Auto-connect if device just got a port and doesn't have an active connection
+                        if (info.port && info.status === 'running' && !state.rfbInstances[id] && device.enabled) {
+                            devicesToConnect.push(device);
+                        }
                     }
+                }
+                // Connect new tiles outside the loop
+                for (const device of devicesToConnect) {
+                    connectTile(device);
                 }
 
                 // Update latency metrics

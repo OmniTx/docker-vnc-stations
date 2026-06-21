@@ -19,7 +19,7 @@ services:
     pids_limit: 256
     # Health check — restarts container if app becomes unresponsive
     healthcheck:
-      test: ["CMD", "wget", "--spider", "-q", "http://localhost:80/health"]
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://localhost:80/health"]
       interval: 30s
       timeout: 10s
       retries: 3
