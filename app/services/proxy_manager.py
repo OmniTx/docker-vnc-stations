@@ -31,8 +31,7 @@ WATCHDOG_INTERVAL = 15
 # Allows page refreshes without killing everything.
 VIEWER_GRACE_SECONDS = int(os.environ.get("VIEWER_GRACE_SECONDS", "10"))
 
-# websockify connect timeout (seconds) — prevents hanging on unreachable targets
-WEBSOCKIFY_TIMEOUT = 10
+
 
 
 def _websockify_stdio() -> tuple:
@@ -116,7 +115,6 @@ class ProxyManager:
         cmd = [
             "websockify",
             "--web", "/app/static/novnc",
-            "--timeout", str(WEBSOCKIFY_TIMEOUT),
             f"0.0.0.0:{ws_port}",
             target,
         ]
