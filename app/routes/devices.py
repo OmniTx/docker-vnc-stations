@@ -47,9 +47,9 @@ async def create_device(device: DeviceCreate):
     if data.get("password"):
         data["password"] = encrypt_password(data["password"])
     device_id = db.create_device(data)
-    # Start websockify if enabled
+    # Start websockify if enabled AND there are active viewers
     ws_port = None
-    if data.get("enabled", True):
+    if data.get("enabled", True) and proxy_manager.has_viewers():
         ws_port = proxy_manager.start(device_id, data["host"], data["port"])
     created = db.get_device(device_id)
     created["ws_port"] = ws_port
@@ -273,14 +273,16 @@ async def import_confirm(body: ImportConfirm):
         if pw:
             device_data["password"] = encrypt_password(pw)
 
+        has_viewers = proxy_manager.has_viewers()
+
         if existing and body.overwrite_duplicates:
             db.update_device(existing["id"], device_data)
-            if device_data.get("enabled", True):
+            if device_data.get("enabled", True) and has_viewers:
                 proxy_manager.restart(existing["id"], host, port)
             imported += 1
         else:
             did = db.create_device(device_data)
-            if device_data.get("enabled", True):
+            if device_data.get("enabled", True) and has_viewers:
                 proxy_manager.start(did, host, port)
             imported += 1
 

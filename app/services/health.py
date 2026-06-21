@@ -1,4 +1,8 @@
-"""Background health checker — TCP-pings every VNC device periodically."""
+"""Background health checker — TCP-pings every VNC device periodically.
+
+After each check cycle, triggers proxy auto-recovery for devices that
+transitioned from offline → online (common with ZeroTier network flaps).
+"""
 
 import socket
 import logging
@@ -7,6 +11,7 @@ import time
 from apscheduler.schedulers.background import BackgroundScheduler
 
 from app import database as db
+from app.services.proxy_manager import proxy_manager
 
 log = logging.getLogger("health_checker")
 
@@ -23,7 +28,7 @@ class HealthChecker:
     # ── internal ───────────────────────────────────────────────────────
 
     @staticmethod
-    def _tcp_check(host: str, port: int, timeout: float = 3.0) -> tuple[str, float]:
+    def _tcp_check(host: str, port: int, timeout: float = 5.0) -> tuple[str, float]:
         """TCP connect and measure round-trip latency. Returns (status, latency_ms)."""
         try:
             start = time.monotonic()
@@ -44,11 +49,40 @@ class HealthChecker:
             log.error("Health check DB error: %s", exc)
             return
 
+        came_online = []  # devices that just transitioned to online
+
         for device in devices:
             status, latency_ms = self._tcp_check(device["host"], device["port"])
             with self._lock:
+                prev_status = self._statuses.get(device["id"])
                 self._statuses[device["id"]] = status
                 self._latencies[device["id"]] = latency_ms if status == "online" else 0.0
+
+                # Detect offline → online transition
+                if status == "online" and prev_status in ("offline", "error", None):
+                    if device.get("enabled"):
+                        came_online.append(device)
+
+        # Trigger proxy recovery for devices that just came back online
+        # (only if there are active viewers — proxies should stay off otherwise)
+        if came_online and proxy_manager.has_viewers():
+            for device in came_online:
+                try:
+                    proxy_status = proxy_manager.get_status(device["id"])
+                    if proxy_status != "running":
+                        port = proxy_manager.start(
+                            device["id"], device["host"], device["port"]
+                        )
+                        if port:
+                            log.info(
+                                "Health check: auto-started proxy for %s (came online) → ws port %d",
+                                device["name"], port,
+                            )
+                except Exception as exc:
+                    log.error(
+                        "Health check: failed to restart proxy for device %d: %s",
+                        device["id"], exc,
+                    )
 
     # ── public API ─────────────────────────────────────────────────────
 

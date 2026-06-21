@@ -6,10 +6,27 @@ services:
     container_name: vnc-monitor-dashboard
     ports:
       - "8109:80"
-      - "6100-6199:6100-6199"
+      - "6100-6115:6100-6115"
     volumes:
       - /DATA/AppData/vnc-monitor:/app/data
     environment: 
       - VNC_ENCRYPTION_KEY=${VNC_ENCRYPTION_KEY:-vnc-monitor-default-key-change-me}
       - HEALTH_CHECK_INTERVAL=${HEALTH_CHECK_INTERVAL:-30}
+      - WS_PORT_COUNT=${WS_PORT_COUNT:-16}
+      - VIEWER_GRACE_SECONDS=${VIEWER_GRACE_SECONDS:-10}
     restart: unless-stopped
+    # Prevent zombie websockify processes from consuming all PIDs
+    pids_limit: 256
+    # Health check — restarts container if app becomes unresponsive
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:80/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+    # Prevent logs from eating disk on busy proxy restarts
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"

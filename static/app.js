@@ -1182,6 +1182,27 @@ function connectSSE() {
 }
 
 // ═══════════════════════════════════════════════════════════════════════
+//  PAGE LIFECYCLE — disconnect proxies when leaving
+// ═══════════════════════════════════════════════════════════════════════
+
+function setupPageLifecycle() {
+    // When the page is being closed/navigated away, disconnect immediately
+    window.addEventListener('beforeunload', () => {
+        // Close SSE so the server sees the viewer disconnect
+        if (state.sse) {
+            state.sse.close();
+            state.sse = null;
+        }
+        // Disconnect all noVNC tile connections
+        for (const id of Object.keys(state.rfbInstances)) {
+            try { state.rfbInstances[id].disconnect(); } catch (e) { /* ignore */ }
+        }
+        // Send a beacon as a fast signal (SSE close is the authoritative one)
+        navigator.sendBeacon('/api/viewer/disconnect');
+    });
+}
+
+// ═══════════════════════════════════════════════════════════════════════
 //  DATA REFRESH
 // ═══════════════════════════════════════════════════════════════════════
 
@@ -1431,7 +1452,10 @@ async function init() {
         bindEvents();
         setupModalCloseHandlers();
 
-        // Connect SSE
+        // Setup page lifecycle (beforeunload disconnect)
+        setupPageLifecycle();
+
+        // Connect SSE — this triggers proxy startup on the server
         connectSSE();
 
         // Update connection metrics display every second

@@ -28,7 +28,7 @@ RUN curl -fSL -o /tmp/novnc.tar.gz \
 # ═══════════════════════════════════════════════════════════════
 FROM python:3.11-alpine
 
-RUN apk add --no-cache libffi
+RUN apk add --no-cache libffi wget
 
 COPY --from=builder /opt/venv /opt/venv
 COPY --from=builder /opt/novnc /app/static/novnc
@@ -42,6 +42,6 @@ COPY static/index.html static/app.js static/style.css /app/static/
 RUN mkdir -p /app/data
 
 EXPOSE 80
-EXPOSE 6100-6199
+EXPOSE 6100-6115
 
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "80"]
